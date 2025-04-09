@@ -1,3 +1,4 @@
+using Newtonsoft.Json.Linq;
 using Serilog.Sinks.InMemory;
 using Serilog.Sinks.InMemory.Assertions;
 
@@ -20,8 +21,67 @@ namespace Serilog.Enrichers.CallerInfo.Tests
                 .WithProperty("Method").WithValue(nameof(CanManuallySpecifyAssemblies))
                 .And.WithProperty("Namespace").WithValue("Serilog.Enrichers.CallerInfo.Tests.CallerInfoTests");
         }
+		[Theory]
+        [LogAspect]
+		[InlineData("TestValue")]
+		public void LogAspectShouldNotBreakLogging(string test)
+		{
+			Log.Logger = new LoggerConfiguration()
+				.Enrich.WithCallerInfo(includeFileInfo: true, new List<string> { "Serilog.Enrichers.CallerInfo.Tests" })
+				.WriteTo.InMemory()
+				.CreateLogger();
 
-        [Fact]
+			Log.Error(new Exception("Error occurred!"), "Test log message");
+			InMemorySink.Instance.Should()
+				.HaveMessage("Test log message")
+				.Appearing().Once()
+				.WithProperty("Method").WithValue(nameof(LogAspectShouldNotBreakLogging))
+				.And.WithProperty("Namespace").WithValue("Serilog.Enrichers.CallerInfo.Tests.CallerInfoTests");
+		}
+		public static IEnumerable<object[]> GetUserChoiceTestData1()
+		{
+			yield return new object[] { new DemoClass() { Value = "DemoClassValue" }, new DemoClass() { Value = "DemoClassValue" } };
+		}
+
+		[Theory]
+		[LogAspect]
+		[MemberData(nameof(GetUserChoiceTestData1))]
+		public void PushedPropertiesShouldContainMethodParametersValues(DemoClass demoClass1, DemoClass demoClass2)
+		{
+			Log.Logger = new LoggerConfiguration()
+				.Enrich.WithCallerInfo(includeFileInfo: true, new List<string> { "Serilog.Enrichers.CallerInfo.Tests" }, includeMethodParametersValues: true, includeMethodParamtereTypes: true, includeMethodParametersNames: true)
+				.WriteTo.InMemory()
+				.CreateLogger();
+
+			Log.Error(new Exception("Error occurred!"), "Test log message");
+            InMemorySink.Instance.Should()
+                .HaveMessage("Test log message")
+                .Appearing().Once()
+                .WithProperty("Method").WithValue(nameof(PushedPropertiesShouldContainMethodParametersValues))
+                .And.WithProperty("Namespace").WithValue("Serilog.Enrichers.CallerInfo.Tests.CallerInfoTests")
+                .And.WithProperty("MethodParametersValues").WithValue("demoClass1: [{\"Value\":\"DemoClassValue\"}];demoClass2: [{\"Value\":\"DemoClassValue\"}];");
+		}
+
+		[Theory]
+		[LogAspect]
+		[MemberData(nameof(GetUserChoiceTestData1))]
+		public void PushedPropertiesShouldContainReturnMethodType(DemoClass demoClass1, DemoClass demoClass2)
+		{
+            Log.Logger = new LoggerConfiguration()
+                .Enrich.WithCallerInfo(includeFileInfo: true, new List<string> { "Serilog.Enrichers.CallerInfo.Tests" }, includeMethodReturnType: true)
+				.WriteTo.InMemory()
+				.CreateLogger();
+
+			Log.Error(new Exception("Error occurred!"), "Test log message");
+			InMemorySink.Instance.Should()
+				.HaveMessage("Test log message")
+				.Appearing().Once()
+				.WithProperty("Method").WithValue(nameof(PushedPropertiesShouldContainReturnMethodType))
+				.And.WithProperty("Namespace").WithValue("Serilog.Enrichers.CallerInfo.Tests.CallerInfoTests")
+				.And.WithProperty("ReturnType").WithValue("System.Void");
+		}
+         
+		[Fact]
         public void CanAutodetectAssemblies()
         {
             Log.Logger = new LoggerConfiguration()
@@ -126,6 +186,10 @@ namespace Serilog.Enrichers.CallerInfo.Tests
         private static void PrivateLocalFunction(string arg)
         {
             Log.Information(arg);
+        }
+        public class DemoClass
+        {
+            public string Value { get; set; }
         }
     }
 }

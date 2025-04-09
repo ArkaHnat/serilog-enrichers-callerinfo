@@ -22,9 +22,22 @@ namespace Serilog.Enrichers.CallerInfo
             bool includeFileInfo,
             IEnumerable<string> allowedAssemblies,
             string prefix = "",
-            int filePathDepth = 0)
+            int filePathDepth = 0,
+			bool includeMethodParamtereTypes = false,
+			bool includeMethodParametersNames = false,
+			bool includeMethodParametersValues = false,
+            bool includeMethodReturnType = false)
         {
-            return enrichmentConfiguration.With(new Enricher(includeFileInfo, allowedAssemblies, prefix, filePathDepth));
+            return enrichmentConfiguration.With(
+                new Enricher(
+                    includeFileInfo, 
+                    allowedAssemblies, 
+                    prefix, 
+                    filePathDepth, 
+                    includeMethodParamtereTypes: includeMethodParamtereTypes, 
+                    includeMethodParametersNames: includeMethodParametersNames, 
+                    includeMethodParametersValues: includeMethodParametersValues,
+					includeMethodReturnType: includeMethodReturnType));
         }
 
         /// <summary>

@@ -1,11 +1,13 @@
-﻿using System;
+﻿using Serilog.Core;
+using Serilog.Events;
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using Serilog.Core;
-using Serilog.Events;
+using System.Reflection;
+using System.Text;
 
 namespace Serilog.Enrichers.CallerInfo
 {
@@ -15,10 +17,31 @@ namespace Serilog.Enrichers.CallerInfo
         private readonly int _filePathDepth;
         private readonly ImmutableHashSet<string> _allowedAssemblies;
         private readonly string _prefix;
+		private readonly bool _includeMethodParameterTypes;
+		private readonly bool _includeMethodParametersNames;
+		private readonly bool _includeMethodParametersValues;
 
-        public Enricher(bool includeFileInfo, IEnumerable<string> allowedAssemblies, string prefix = "", int filePathDepth = 0)
-        {
-            _includeFileInfo = includeFileInfo;
+		private readonly bool _includeMethodReturnType;
+		private readonly string _ignoredMethodTypeCreatedByAspectInjector = "__a$";
+		public Enricher(bool includeFileInfo, 
+            IEnumerable<string> allowedAssemblies, 
+            string prefix = "", 
+            int filePathDepth = 0, 
+            bool includeMethodParamtereTypes = false,
+			bool includeMethodParametersNames = false,
+            bool includeMethodParametersValues = false,
+			bool includeMethodReturnType = false)
+		{
+			_includeFileInfo = includeFileInfo;
+			_filePathDepth = filePathDepth;
+			_allowedAssemblies = allowedAssemblies.ToImmutableHashSet(equalityComparer: StringComparer.OrdinalIgnoreCase);
+			_prefix = prefix ?? string.Empty;
+
+			_includeMethodParameterTypes = includeMethodParamtereTypes;
+			_includeMethodParametersNames = includeMethodParametersNames;
+			_includeMethodParametersValues = includeMethodParametersValues;
+            _includeMethodReturnType = includeMethodReturnType;
+			_includeFileInfo = includeFileInfo;
             _filePathDepth = filePathDepth;
             _allowedAssemblies = allowedAssemblies.ToImmutableHashSet(equalityComparer: StringComparer.OrdinalIgnoreCase);
             _prefix = prefix ?? string.Empty;
@@ -33,7 +56,7 @@ namespace Serilog.Enrichers.CallerInfo
         {
             var st = EnhancedStackTrace.Current();
 
-            var frame = st.FirstOrDefault(x => x.HasMethod() && x.MethodInfo.IsInAllowedAssembly(_allowedAssemblies));
+            var frame = st.FirstOrDefault(x => x.HasMethod() && x.MethodInfo.IsInAllowedAssembly(_allowedAssemblies) && !x.MethodInfo.Name.Contains(_ignoredMethodTypeCreatedByAspectInjector));
             var method = frame?.MethodInfo.MethodBase;
             var type = method?.DeclaringType;
 
@@ -58,7 +81,49 @@ namespace Serilog.Enrichers.CallerInfo
                         logEvent.AddPropertyIfAbsent(new LogEventProperty($"{_prefix}ColumnNumber", new ScalarValue(frame.GetFileColumnNumber())));
                     }
                 }
-            }
+				if (_includeMethodParameterTypes)
+				{
+					ParameterInfo[] methodParameters = method.GetParameters();
+					StringBuilder sb = new StringBuilder();
+                    foreach (ParameterInfo parameter in methodParameters)
+                    {
+                        sb.Append(parameter.ParameterType.Name);
+                        sb.Append(" ");
+                        if (_includeMethodParametersNames)
+                        {
+                            sb.Append(parameter.Name);
+                        }
+
+                        sb.Append(", ");
+
+                        if (_includeMethodParametersValues)
+						{
+							var values = LogMethodContext.Get();
+
+							if (values != null)
+							{
+								foreach (var kvp in values)
+								{
+									logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty(kvp.Key, kvp.Value));
+								}
+							}
+						}
+					}
+
+					logEvent.AddPropertyIfAbsent(new LogEventProperty($"{this._prefix}MethodParameters", new ScalarValue(sb.ToString())));
+				}
+                if (_includeMethodReturnType)
+                {
+					if (method is MethodInfo methodInfo)
+					{
+						logEvent.AddPropertyIfAbsent(new LogEventProperty($"{this._prefix}ReturnType", new ScalarValue(methodInfo.ReturnType.FullName)));
+					}
+					else
+					{
+						logEvent.AddPropertyIfAbsent(new LogEventProperty($"{this._prefix}ReturnType", new ScalarValue("Unknown")));
+					}
+				}
+			}
         }
 
         /// <summary>

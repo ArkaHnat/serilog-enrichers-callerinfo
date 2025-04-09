@@ -86,3 +86,6 @@ The following properties are added:
 | `SourceFile` | The path of the source file of the calling method | `includeFileInfo` and `filePathDepth` |
 | `LineNumber` | The line number of the calling method | `includeFileInfo` |
 | `ColumnNumber` | The column number of the calling method | `includeFileInfo` |
+| `MethodParameters` | The parameters of the calling method.  | `_includeMethodParameterTypes`,`_includeMethodParameterNames` |
+| `MethodParametersValues` | The parameters values of the calling method | `includeMethodParametersValues` |
+| `MethodReturnType` | The return type of the calling method | `includeMethodReturnType` |
